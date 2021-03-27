@@ -1,4 +1,4 @@
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.col
 object Main {
   def main(args: Array[String]): Unit = {
@@ -33,21 +33,20 @@ object Main {
     var countriesRow = df.select("country").distinct()
     var session = spark.sqlContext.sparkSession
     df.createOrReplaceTempView("df")
-    countriesRow.show()
     var countries = countriesRow.collect()
-    countries.foreach(country =>
-      session.sql(
-        "CREATE TEMPORARY VIEW `" + country
-          .toString()
-          .substring(
-            1,
-            country.toString().length - 1
-          ) + "` AS SELECT dateRep,cases FROM df WHERE country = '" + country
-          .toString()
-          .substring(1, country.toString().length - 1) + "'"
-      )
-    )
-    var chad = session.sql("SELECT * FROM Chad")
-    chad.show()
+    var views = scala.collection.mutable.Map.empty[String, Dataset[Row]]
+    var country_str: String = ""
+    countries.foreach(country => {
+      country_str = country
+        .toString()
+        .substring(1, country.toString().length - 1)
+      session
+        .sql(
+          "CREATE TEMPORARY VIEW `" + country_str + "` AS SELECT dateRep,cases FROM df WHERE country = '" + country_str + "'"
+        )
+      views(country_str) =
+        session.sql("SELECT * FROM `" + country_str + "`").orderBy("dateRep")
+    })
+    views.values.foreach(view => view.show())
   }
 }
