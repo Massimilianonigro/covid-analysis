@@ -1,5 +1,12 @@
 import org.apache.spark.sql.catalyst.util.DateFormatter
-import org.apache.spark.sql.{ColumnName, Dataset, Row, SparkSession, functions}
+import org.apache.spark.sql.{
+  Column,
+  ColumnName,
+  Dataset,
+  Row,
+  SparkSession,
+  functions
+}
 import org.apache.spark.sql.functions.{col, min}
 
 import java.time.format.DateTimeFormatter
@@ -8,6 +15,7 @@ import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.{DateType, LongType, TimestampType}
 object Main {
+
   def main(args: Array[String]): Unit = {
 
     val spark = SparkSession
@@ -15,7 +23,7 @@ object Main {
       .appName("Covid-Analysis")
       .config("spark.master", "local")
       .getOrCreate()
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("ERROR")
 
     import spark.implicits._
 
@@ -69,18 +77,33 @@ object Main {
       .withColumn("next_dates", fill_dates($"dateRep", $"diff"))
       .withColumn(
         "cases",
-        lit(compute_avg_cases($"dateRep", $"diff", views("Afghanistan")))
+        lit(0)
       )
       .withColumn("dateRep", explode($"next_dates"))
       .withColumn("dateRep", $"dateRep")
-    tempDf.show()
     views("Afghanistan") = views("Afghanistan")
       .union(
         tempDf
           .select("dateRep", "cases")
       )
       .orderBy("dateRep")
-    views("Afghanistan").show()
+    val intervals_to_fill =
+      tempDf
+        .select("next_dates", "diff")
+        .distinct()
+        .withColumn("diff", col("diff").cast("Double"))
+        .collect()
+    intervals_to_fill.foreach(interval => {
+      views("Afghanistan") = views("Afghanistan").withColumn(
+        "cases",
+        when(
+          col("dateRep").isInCollection(interval.getList(0)),
+          lit(($"cases" / (interval.getDouble(1) + 1.0)))
+        ).otherwise($"cases")
+      )
+    })
+    print(intervals_to_fill.mkString("Array(", ", ", ")"))
+    views("Afghanistan").show(100)
     //views.values.foreach(view => view.show())
   }
   def fill_dates: UserDefinedFunction =
@@ -94,21 +117,4 @@ object Main {
           .replace(" ", "0")
       })
     })
-
-  def compute_avg_cases(start: ColumnName, excludedDiff: ColumnName, view: Dataset[Row]): Int = {
-  {
-      var dtFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-      var fromDt = LocalDate.parse(start.toString(), dtFormatter)
-      var dt = fromDt.plusDays(excludedDiff)
-      "%4d-%2d-%2d"
-        .format(dt.getYear, dt.getMonthValue, dt.getDayOfMonth)
-        .replace(" ", "0")
-      var finalCases =
-        view.select("cases").filter("dateRep = " + dt.toString).collect()
-      var avgCases = finalCases(0)(0).asInstanceOf[Int] / excludedDiff
-      avgCases
-  }
-
-
-
 }
