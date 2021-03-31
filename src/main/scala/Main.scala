@@ -13,23 +13,27 @@ import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime}
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{DateType, LongType, TimestampType}
+import CountryHandler._
+
 object Main {
 
   def main(args: Array[String]): Unit = {
 
+    // initialize session
     val spark = SparkSession
       .builder()
       .appName("Covid-Analysis")
       .config("spark.master", "local")
       .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
-
     import spark.implicits._
 
+    // read dataset
     var df = spark.read.csv(
       "./resources/data.csv"
     )
+
+    // remove useless columns and rename useful ones
     df = df
       .drop("_c1") //day
       .drop("_c2") //month
@@ -52,83 +56,17 @@ object Main {
     var countries = countriesRow.collect()
     var views = scala.collection.mutable.Map.empty[String, Dataset[Row]]
     var country_str: String = ""
+
     countries.foreach(country => {
-      country_str = country
-        .toString()
-        .substring(1, country.toString().length - 1)
-      session
-        .sql(
-          "CREATE TEMPORARY VIEW `" + country_str + "` AS SELECT dateRep,cases FROM df WHERE country = '" + country_str + "'"
-        )
+      country_str = CountryHandler.getCountryName(country)
+      print("\nHandling country: " + country_str)
+      views(country_str) = CountryHandler.getCountryView(country, session)
+      views(country_str).withColumn("cases", col("cases").cast("Double"))
       views(country_str) =
-        session.sql("SELECT * FROM `" + country_str + "`").orderBy("dateRep")
+        CountryHandler.fillMissingDates(views(country_str), session)
     })
 
-    //Now for the values of each view in country we have to iterate on the days and fill the gaps
-    views("Afghanistan") = views("Afghanistan")
-      .withColumn("dateRep", to_date($"dateRep", "dd/MM/yyyy"))
-    val w = Window.orderBy($"dateRep")
-    val tempDf = views("Afghanistan")
-      .withColumn("diff", datediff(lead($"dateRep", 1).over(w), $"dateRep"))
-      .filter(
-        $"diff" > 1
-      ) // Pick date diff more than one day to generate our date
-      .withColumn("next_dates", fill_dates($"dateRep", $"diff"))
-      .withColumn(
-        "cases",
-        lit(0)
-      )
-      .withColumn("dateRep", explode($"next_dates"))
-      .withColumn("dateRep", $"dateRep")
-    views("Afghanistan") = views("Afghanistan")
-      .union(
-        tempDf
-          .select("dateRep", "cases")
-      )
-      .orderBy("dateRep")
-    val intervals_to_fill =
-      tempDf
-        .select("next_dates", "diff")
-        .distinct()
-        .withColumn("diff", col("diff").cast("Double"))
-        .collect()
-    intervals_to_fill.foreach(interval => {
-      val indexOfFirstDate = views("Afghanistan")
-        .select("dateRep")
-        .collect()
-        .indexOf(
-          views("Afghanistan")
-            .select("dateRep")
-            .filter(col("dateRep").isInCollection(interval.getList(0)))
-            .collect()(0)
-        )
-      val indexOfDateOfReport =
-        indexOfFirstDate + interval.getDouble(1).toInt - 1
-      val casesReported = views("Afghanistan")
-        .collectAsList()
-        .get(indexOfDateOfReport.asInstanceOf[Int])
-        .getString(1)
-        .toDouble
-      views("Afghanistan") = views("Afghanistan").withColumn(
-        "cases",
-        when(
-          col("dateRep").isInCollection(interval.getList(0)),
-          lit((casesReported / (interval.getDouble(1) + 1.0)))
-        ).otherwise($"cases")
-      )
-    })
     views("Afghanistan").show(100)
     //views.values.foreach(view => view.show())
   }
-  def fill_dates: UserDefinedFunction =
-    udf((start: String, excludedDiff: Int) => {
-      val dtFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-      val fromDt = LocalDate.parse(start, dtFormatter)
-      (1 until excludedDiff).map(day => {
-        val dt = fromDt.plusDays(day)
-        "%4d-%2d-%2d"
-          .format(dt.getYear, dt.getMonthValue, dt.getDayOfMonth)
-          .replace(" ", "0")
-      })
-    })
 }
