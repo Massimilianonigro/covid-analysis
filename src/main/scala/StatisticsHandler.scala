@@ -3,7 +3,10 @@ import org.apache.spark.sql.functions.{avg, lag}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import java.text.SimpleDateFormat
+import java.time.Duration
 import java.util.Date
+import java.time.temporal.ChronoUnit.DAYS
+import scala.collection.mutable.ArrayBuffer
 
 object StatisticsHandler {
 
@@ -32,7 +35,7 @@ object StatisticsHandler {
       dateRange: scala.collection.mutable.Map[String, (String, String)],
       date: String
   ): List[String] = {
-    var countries = List.empty[String]
+    var countries = ArrayBuffer.empty[String]
     var formattedDate = formatter.parse(date)
     for ((k, v) <- dateRange) {
       val formattedStart = formatter.parse(v._1)
@@ -47,7 +50,7 @@ object StatisticsHandler {
         countries += k
       }
     }
-    countries
+    countries.toList
   }
   def getReportingInterval(
       dateRange: scala.collection.mutable.Map[String, (String, String)]
@@ -63,6 +66,23 @@ object StatisticsHandler {
         maxDate = formattedEnd
     })
     (minDate, maxDate)
+  }
+  def getDateRange(
+      dateFrom: Date,
+      dateTo: Date
+  ): Seq[Date] = {
+    val daysBetween = Duration
+      .between(
+        dateFrom.toInstant,
+        dateTo.toInstant
+      )
+      .toDays
+
+    val newRows = Seq.newBuilder[Date]
+    // get all intermediate dates
+    for (day <- 0L to daysBetween)
+      newRows += Date.from(dateFrom.toInstant.plus(day, DAYS))
+    newRows.result()
   }
 
 }

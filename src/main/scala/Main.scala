@@ -1,4 +1,3 @@
-import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.{
   Column,
   ColumnName,
@@ -9,11 +8,10 @@ import org.apache.spark.sql.{
 }
 import org.apache.spark.sql.functions.{col, lag, min}
 
-import java.time.format.DateTimeFormatter
-import java.time.{LocalDate, LocalDateTime}
-import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 import org.apache.spark.sql.functions._
+
 import java.time.temporal.ChronoUnit.DAYS
+import java.util.Date
 
 object Main {
 
@@ -82,15 +80,21 @@ object Main {
       }
     })
     var reportingInterval = StatisticsHandler.getReportingInterval(dateRange)
-    case class MinMax(min: String, max: String)
-    var minMax = spark.emptyDataset[MinMax]
+    case class Empty()
+    var minMax = spark.emptyDataFrame
     minMax.withColumn("min", lit(reportingInterval._1.toString))
     minMax.withColumn("max", lit(reportingInterval._2.toString))
+    val dateRangeUDF = udf(StatisticsHandler.getDateRange _)
+    minMax.withColumn("range", dateRangeUDF(col("min"), col("max")))
+    val allDates = minMax
+      .withColumn("date", explode(col("range")))
+      .drop("range", "min", "max")
+
     val daysCount = DAYS.between(
       reportingInterval._1.toInstant,
       reportingInterval._2.toInstant
     )
-    (0 until daysCount)
+    (0 until daysCount.toInt)
       .map(days => reportingInterval._1.toInstant.plus(days, DAYS))
       .foreach(day => {
         print("Day is now " + day.toString)
@@ -102,14 +106,22 @@ object Main {
             country,
             views(country)
               .select("perc_increase")
-              .withColumn("dateRep", col("dateRep").equalTo(day.toString))
+              .withColumn(
+                "dateRep",
+                col("dateRep").equalTo(Date.from(day).toString)
+              )
               .collect()(0)(0)
               .toString
               .toDouble
           )
         }
+        allDates.withColumn(
+          "top10_perc_increase",
+          when($"dateRep" === day.toString, lit(topTen.getTopTen()))
+        )
       })
     views("Afghanistan").show(500, truncate = false)
+    allDates.show(500, truncate = false)
     //views.values.foreach(view => view.show())
   }
 }
