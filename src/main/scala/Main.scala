@@ -65,7 +65,6 @@ object Main {
     })
 
     //Now for the values of each view in country we have to iterate on the days and fill the gaps
-
     views("Afghanistan") = views("Afghanistan")
       .withColumn("dateRep", to_date($"dateRep", "dd/MM/yyyy"))
     val w = Window.orderBy($"dateRep")
@@ -94,15 +93,30 @@ object Main {
         .withColumn("diff", col("diff").cast("Double"))
         .collect()
     intervals_to_fill.foreach(interval => {
+      val indexOfFirstDate = views("Afghanistan")
+        .select("dateRep")
+        .collect()
+        .indexOf(
+          views("Afghanistan")
+            .select("dateRep")
+            .filter(col("dateRep").isInCollection(interval.getList(0)))
+            .collect()(0)
+        )
+      val indexOfDateOfReport =
+        indexOfFirstDate + interval.getDouble(1).toInt - 1
+      val casesReported = views("Afghanistan")
+        .collectAsList()
+        .get(indexOfDateOfReport.asInstanceOf[Int])
+        .getString(1)
+        .toDouble
       views("Afghanistan") = views("Afghanistan").withColumn(
         "cases",
         when(
           col("dateRep").isInCollection(interval.getList(0)),
-          lit(($"cases" / (interval.getDouble(1) + 1.0)))
+          lit((casesReported / (interval.getDouble(1) + 1.0)))
         ).otherwise($"cases")
       )
     })
-    print(intervals_to_fill.mkString("Array(", ", ", ")"))
     views("Afghanistan").show(100)
     //views.values.foreach(view => view.show())
   }
