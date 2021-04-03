@@ -1,13 +1,14 @@
 import org.apache.spark.sql.expressions.Window
-import org.apache.spark.sql.functions.{avg, lag}
+import org.apache.spark.sql.functions.{avg, col, lag, lit, when}
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import java.text.SimpleDateFormat
 import java.util.Date
+import scala.collection.mutable.ArrayBuffer
 
 object StatisticsHandler {
 
-  var formatter = new SimpleDateFormat("yyyy-MM-dd")
+  val formatter = new SimpleDateFormat("yyyy-MM-dd")
   def calculateMovingAverage(country: Dataset[Row]): Dataset[Row] = {
     country.withColumn(
       "mov_average",
@@ -22,21 +23,27 @@ object StatisticsHandler {
       session: SparkSession
   ): Dataset[Row] = {
     import session.implicits._
-    country.withColumn(
-      "perc_increase",
-      (country("mov_average") - lag($"mov_average", 1)
-        .over(Window.orderBy("dateRep"))) / 100
-    )
+    country
+      .withColumn(
+        "perc_increase",
+        (country("mov_average") - lag($"mov_average", 1)
+          .over(Window.orderBy("dateRep"))) / 100
+      )
+      .withColumn(
+        "perc_increase",
+        when(col("perc_increase").isNull, lit("0.0"))
+          .otherwise($"perc_increase")
+      )
   }
   def reportingCountries(
       dateRange: scala.collection.mutable.Map[String, (String, String)],
       date: String
-  ): List[String] = {
-    var countries = List.empty[String]
-    var formattedDate = formatter.parse(date)
+  ): ArrayBuffer[String] = {
+    var countries = ArrayBuffer.empty[String]
+    val formattedDate = formatter.parse(date)
     for ((k, v) <- dateRange) {
-      val formattedStart = formatter.parse(v._1)
-      val formattedEnd = formatter.parse(v._2)
+      val formattedEnd = formatter.parse(v._1)
+      val formattedStart = formatter.parse(v._2)
       if (
         (formattedDate
           .before(formattedEnd) || formattedDate.equals(
@@ -44,7 +51,7 @@ object StatisticsHandler {
         ) && (formattedDate
           .after(formattedStart) || formattedDate.equals(formattedStart)))
       ) {
-        countries += k
+        countries = countries :+ k
       }
     }
     countries

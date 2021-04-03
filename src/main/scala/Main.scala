@@ -13,7 +13,12 @@ import java.time.format.DateTimeFormatter
 import java.time.{LocalDate, LocalDateTime}
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.types.ArrayType
+
+import java.text.SimpleDateFormat
 import java.time.temporal.ChronoUnit.DAYS
+import java.util.Base64.Encoder
+import java.util.Date
 
 object Main {
 
@@ -82,34 +87,45 @@ object Main {
       }
     })
     var reportingInterval = StatisticsHandler.getReportingInterval(dateRange)
-    case class MinMax(min: String, max: String)
-    var minMax = spark.emptyDataset[MinMax]
-    minMax.withColumn("min", lit(reportingInterval._1.toString))
-    minMax.withColumn("max", lit(reportingInterval._2.toString))
+    var minMax = Seq
+      .empty[String]
+      .toDS()
+      .withColumnRenamed("value", "day")
+      .withColumn("top_ten", lit(null: ArrayType))
     val daysCount = DAYS.between(
-      reportingInterval._1.toInstant,
-      reportingInterval._2.toInstant
+      reportingInterval._2.toInstant,
+      reportingInterval._1.toInstant
     )
-    (0 until daysCount)
-      .map(days => reportingInterval._1.toInstant.plus(days, DAYS))
+    var topTen = TopTen
+    val pattern = "yyyy-MM-dd"
+    val simpleDateFormat = new SimpleDateFormat(pattern)
+    (0 until daysCount.toInt)
+      .map(days => reportingInterval._2.toInstant.plus(days, DAYS))
       .foreach(day => {
-        print("Day is now " + day.toString)
+        val dateDay = simpleDateFormat.format(Date.from(day))
+        print("\n \n Day is now " + dateDay)
         var countries =
-          StatisticsHandler.reportingCountries(dateRange, day.toString)
-        var topTen = TopTen
-        for (country <- countries) {
+          StatisticsHandler.reportingCountries(dateRange, dateDay)
+        countries.foreach(country => {
           topTen.add(
             country,
             views(country)
               .select("perc_increase")
-              .withColumn("dateRep", col("dateRep").equalTo(day.toString))
+              .filter(views(country)("dateRep") === dateDay)
               .collect()(0)(0)
               .toString
               .toDouble
           )
-        }
+        })
+        //At the end of the day the topTen list has to be added to the minMax dataset
+        var rowToAdd = Seq(
+          (dateDay, topTen.getCountries)
+        ).toDF("day", "top_ten")
+        minMax = minMax.union(rowToAdd)
+        topTen.clear()
       })
-    views("Afghanistan").show(500, truncate = false)
+    minMax.show(100)
+    //views("Afghanistan").show(500, truncate = false)
     //views.values.foreach(view => view.show())
   }
 }
