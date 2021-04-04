@@ -8,6 +8,10 @@ import java.time.format.DateTimeFormatter
 import scala.collection.mutable
 
 object CountryHandler {
+  def getCountries(df: Dataset[Row]): Array[Row] = {
+    val countriesRow = df.select("country").distinct
+    countriesRow.collect()
+  }
   def getCountryView(
       country: Row,
       session: SparkSession
