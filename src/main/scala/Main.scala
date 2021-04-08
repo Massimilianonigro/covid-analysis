@@ -1,15 +1,4 @@
-import org.apache.spark.sql.{Dataset, Row, SparkSession, functions}
-import org.apache.spark.sql.functions.col
-
-import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.ArrayType
-
-import java.text.SimpleDateFormat
-import java.time.temporal.ChronoUnit.DAYS
-import java.util.Date
-import java.util.concurrent.Executors
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, ExecutionContext, Future}
+import org.apache.spark.sql.SparkSession
 
 object Main {
 
@@ -27,10 +16,11 @@ object Main {
     df.createOrReplaceTempView("df")
     val dbManipulator = new DbManipulator(df, session)
 
-    dbManipulator.setMovingAverageAndPercentageIncrease()
-    dbManipulator.computeTopTen()
+    val (country_views, data_date_range) =
+      dbManipulator.computeMovingAverageAndPercentageIncrease()
+    val topTen = dbManipulator.computeTopTen(country_views, data_date_range)
     dbManipulator.shutdown()
-    dbManipulator.minMax.show(100)
+    topTen.show(100)
   }
 
   def initSession(): SparkSession = {

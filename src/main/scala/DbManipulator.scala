@@ -13,29 +13,26 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 
 class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
 
-  val views: mutable.Map[String, Dataset[Row]] =
-    scala.collection.concurrent.TrieMap.empty[String, Dataset[Row]]
-  val dateRange: mutable.Map[String, (String, String)] =
-    scala.collection.concurrent.TrieMap.empty[String, (String, String)]
-
   var executor: ExecutorService =
     Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
 
   var ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
-  val countries: Array[Row] = CountryHandler.getCountries(df)
   val session: SparkSession = sparkSession.sqlContext.sparkSession
 
   import sparkSession.implicits._
-  var minMax: DataFrame = Seq
-    .empty[String]
-    .toDS()
-    .withColumnRenamed("value", "day")
-    .withColumn("top_ten", lit(null: ArrayType))
 
-  def setMovingAverageAndPercentageIncrease(): Unit = {
+  def computeMovingAverageAndPercentageIncrease(): (
+      mutable.Map[String, Dataset[Row]],
+      mutable.Map[String, (String, String)]
+  ) = {
 
+    val views: mutable.Map[String, Dataset[Row]] =
+      scala.collection.concurrent.TrieMap.empty[String, Dataset[Row]]
+    val dateRange: mutable.Map[String, (String, String)] =
+      scala.collection.concurrent.TrieMap.empty[String, (String, String)]
     var country_str: String = ""
     df.show(200, truncate = true)
+    val countries: Array[Row] = CountryHandler.getCountries(df)
     val results: Seq[Future[Int]] =
       countries.map(country => {
         Future {
@@ -64,18 +61,27 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
           0
         }(ec)
       })
-    var allDone: Future[Seq[Int]] = Future.sequence(results)
+    val allDone: Future[Seq[Int]] = Future.sequence(results)
     //wait for results
     Await.result(allDone, scala.concurrent.duration.Duration.Inf)
+    (views, dateRange)
   }
 
-  def computeTopTen(): Unit = {
+  def computeTopTen(
+      views: mutable.Map[String, Dataset[Row]],
+      dateRange: mutable.Map[String, (String, String)]
+  ): DataFrame = {
 
     val reportingInterval = StatisticsHandler.getReportingInterval(dateRange)
     val daysCount = DAYS.between(
       reportingInterval._2.toInstant,
       reportingInterval._1.toInstant
     )
+    var minMax: DataFrame = Seq
+      .empty[String]
+      .toDS()
+      .withColumnRenamed("value", "day")
+      .withColumn("top_ten", lit(null: ArrayType))
     val topTen = TopTen
     val pattern = "yyyy-MM-dd"
     val simpleDateFormat = new SimpleDateFormat(pattern)
@@ -88,7 +94,7 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
         Future {
           val dateDay = simpleDateFormat.format(Date.from(day))
           print("\n \n Day is now " + dateDay)
-          var countries =
+          val countries =
             StatisticsHandler.reportingCountries(dateRange, dateDay)
           countries.foreach(country => {
             topTen.add(
@@ -102,7 +108,7 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
             )
           })
           //At the end of the day the topTen list has to be added to the minMax dataset
-          var rowToAdd = Seq(
+          val rowToAdd = Seq(
             (dateDay, topTen.getCountries)
           ).toDF("day", "top_ten")
           minMax = minMax.union(rowToAdd)
@@ -114,9 +120,10 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     val allDone = Future.sequence(results)
     //wait for results
     Await.result(allDone, scala.concurrent.duration.Duration.Inf)
+    minMax
   }
 
-  def shutdown() = {
+  def shutdown(): Unit = {
     executor.shutdown()
   }
 
