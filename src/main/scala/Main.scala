@@ -1,3 +1,4 @@
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 object Main {
@@ -9,7 +10,7 @@ object Main {
     val session = spark.sqlContext.sparkSession
 
     var df = spark.read.csv(
-      "./resources/data.csv"
+      "/home/mpiuser/resources/data.csv"
     )
 
     df = PreprocessingHandler.dfPreprocessing(df)
@@ -27,7 +28,8 @@ object Main {
     SparkSession
       .builder()
       .appName("Covid-Analysis")
-      .config("spark.master", "local")
+      .config("spark.master", "spark://192.168.43.129:7077")
+      .config("spark.jars", "out/artifacts/covid-analysis.jar")
       .getOrCreate()
 
   }
