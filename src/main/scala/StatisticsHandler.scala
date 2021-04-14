@@ -4,8 +4,7 @@ import org.apache.spark.sql.{Dataset, Row, SparkSession}
 
 import java.text.SimpleDateFormat
 import java.util.Date
-import scala.collection.mutable.ArrayBuffer
-
+import collection.immutable.List
 object StatisticsHandler {
 
   val formatter = new SimpleDateFormat("yyyy-MM-dd")
@@ -38,8 +37,8 @@ object StatisticsHandler {
   def reportingCountries(
       dateRange: scala.collection.mutable.Map[String, (String, String)],
       date: String
-  ): ArrayBuffer[String] = {
-    var countries = ArrayBuffer.empty[String]
+  ): List[String] = {
+    var countries = List.empty[String]
     val formattedDate = formatter.parse(date)
     for ((k, v) <- dateRange) {
       val formattedEnd = formatter.parse(v._1)

@@ -7,16 +7,17 @@ import java.text.SimpleDateFormat
 import java.time.temporal.ChronoUnit.DAYS
 import java.util.Date
 import java.util.concurrent.{ExecutorService, Executors}
-import scala.collection.mutable
+import scala.collection.mutable // needed for TrieMap (thread-safe map)
+import scala.collection.immutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
 
-  var executor: ExecutorService =
+  val executor: ExecutorService =
     Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
 
-  var ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
+  val ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
   val session: SparkSession = sparkSession.sqlContext.sparkSession
 
   import sparkSession.implicits._
@@ -71,7 +72,7 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
       views: mutable.Map[String, Dataset[Row]],
       dateRange: mutable.Map[String, (String, String)]
   ): DataFrame = {
-
+    var temp_list: immutable.List[(String, Double)] = List.empty
     val reportingInterval = StatisticsHandler.getReportingInterval(dateRange)
     val daysCount = DAYS.between(
       reportingInterval._2.toInstant,
@@ -85,9 +86,9 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     val topTen = TopTen
     val pattern = "yyyy-MM-dd"
     val simpleDateFormat = new SimpleDateFormat(pattern)
-    executor =
-      Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
-    ec = ExecutionContext.fromExecutor(executor)
+    //executor =
+    //  Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
+    //ec = ExecutionContext.fromExecutor(executor)
     val results: Seq[Future[Int]] = (0 until daysCount.toInt)
       .map(days => reportingInterval._2.toInstant.plus(days, DAYS))
       .map(day => {
@@ -97,7 +98,8 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
           val countries =
             StatisticsHandler.reportingCountries(dateRange, dateDay)
           countries.foreach(country => {
-            topTen.add(
+            temp_list = topTen.add(
+              temp_list,
               country,
               views(country)
                 .select("perc_increase")
@@ -109,10 +111,10 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
           })
           //At the end of the day the topTen list has to be added to the minMax dataset
           val rowToAdd = Seq(
-            (dateDay, topTen.getCountries)
+            (dateDay, topTen.getCountries(temp_list))
           ).toDF("day", "top_ten")
           minMax = minMax.union(rowToAdd)
-          topTen.clear()
+          topTen.clear(temp_list)
           0
         }(ec)
       })

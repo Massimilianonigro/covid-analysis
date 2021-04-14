@@ -1,18 +1,20 @@
-import scala.::
+import scala.collection.immutable.List
 import scala.collection.mutable.ArrayBuffer
-import scala.util.control.Breaks.break
 import scala.util.control.Breaks.{break, breakable}
 
 object TopTen {
   val dimension = 10
-  var buffer: ArrayBuffer[(String, Double)] =
-    ArrayBuffer.empty[(String, Double)]
-
-  def add(country: String, percIncrease: Double): Unit = {
+  def add(
+      buffer: List[(String, Double)],
+      country: String,
+      percIncrease: Double
+  ): List[(String, Double)] = {
+    var temp: ArrayBuffer[(String, Double)] =
+      buffer.to[collection.mutable.ArrayBuffer]
     breakable {
       if (buffer.length < dimension) {
-        buffer = buffer :+ (country, percIncrease)
-        buffer = buffer.sortWith(_._2 < _._2)
+        temp = temp :+ (country, percIncrease)
+        temp = temp.sortWith(_._2 < _._2)
       } else {
         var index = -1
         buffer.foreach(elem => {
@@ -22,22 +24,25 @@ object TopTen {
           }
         })
         if (index != -1) {
-          buffer(index) = (country, percIncrease)
+          temp(index) = (country, percIncrease)
         }
       }
     }
+    temp.toList
   }
 
-  def getCountries: ArrayBuffer[String] = {
-    var countries = ArrayBuffer.empty[String]
+  def getCountries(buffer: List[(String, Double)]): List[String] = {
+    var countries = List.empty[String]
     buffer.foreach(score => {
       countries = countries :+ score._1
     })
     countries
   }
 
-  def clear(): Unit = {
-    buffer.clear()
+  def clear(buffer: List[(String, Double)]): List[(String, Double)] = {
+    val temp: ArrayBuffer[(String, Double)] = buffer.to[ArrayBuffer]
+    temp.clear()
+    temp.toList
   }
 
 }

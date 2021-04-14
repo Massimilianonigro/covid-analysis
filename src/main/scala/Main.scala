@@ -1,4 +1,3 @@
-import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 object Main {
@@ -29,7 +28,7 @@ object Main {
       .builder()
       .appName("Covid-Analysis")
       .config("spark.master", "spark://192.168.43.129:7077")
-      .config("spark.jars", "out/artifacts/covid-analysis.jar")
+      .config("spark.jars", "/home/mpiuser/resources/covid-analysis.jar")
       .getOrCreate()
 
   }

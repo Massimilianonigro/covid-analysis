@@ -1,11 +1,9 @@
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.expressions.{UserDefinedFunction, Window}
 
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import scala.collection.mutable
 
 object CountryHandler {
   def getCountries(df: Dataset[Row]): Array[Row] = {
@@ -16,7 +14,6 @@ object CountryHandler {
       country: Row,
       session: SparkSession
   ): Dataset[Row] = {
-    var views = scala.collection.mutable.Map.empty[String, Dataset[Row]]
     var country_str: String = ""
 
     country_str = getCountryName(country)
