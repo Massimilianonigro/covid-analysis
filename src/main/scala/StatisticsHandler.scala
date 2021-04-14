@@ -35,7 +35,7 @@ object StatisticsHandler {
       )
   }
   def reportingCountries(
-      dateRange: scala.collection.mutable.Map[String, (String, String)],
+      dateRange: scala.collection.immutable.Map[String, (String, String)],
       date: String
   ): List[String] = {
     var countries = List.empty[String]
@@ -44,11 +44,11 @@ object StatisticsHandler {
       val formattedEnd = formatter.parse(v._1)
       val formattedStart = formatter.parse(v._2)
       if (
-        (formattedDate
+        formattedDate
           .before(formattedEnd) || formattedDate.equals(
           formattedEnd
         ) && (formattedDate
-          .after(formattedStart) || formattedDate.equals(formattedStart)))
+          .after(formattedStart) || formattedDate.equals(formattedStart))
       ) {
         countries = countries :+ k
       }
@@ -56,7 +56,7 @@ object StatisticsHandler {
     countries
   }
   def getReportingInterval(
-      dateRange: scala.collection.mutable.Map[String, (String, String)]
+      dateRange: scala.collection.immutable.Map[String, (String, String)]
   ): (Date, Date) = {
     var minDate: Date = new Date(Long.MaxValue)
     var maxDate: Date = new Date(Long.MinValue)

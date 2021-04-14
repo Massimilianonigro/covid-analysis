@@ -89,7 +89,7 @@ object CountryHandler {
         "cases",
         when(
           col("dateRep").isInCollection(interval.getList(0)),
-          lit((casesReported / (interval.getDouble(1) + 1.0)))
+          lit(casesReported / (interval.getDouble(1) + 1.0))
         ).otherwise($"cases")
       )
     })

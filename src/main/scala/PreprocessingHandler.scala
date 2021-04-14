@@ -2,7 +2,7 @@ import org.apache.spark.sql.{Dataset, Row}
 
 object PreprocessingHandler {
   def dfPreprocessing(df: Dataset[Row]): Dataset[Row] = {
-    var out = df
+    val out = df
       .drop("_c1") //day
       .drop("_c2") //month
       .drop("_c3") //year

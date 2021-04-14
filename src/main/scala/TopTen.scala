@@ -1,5 +1,4 @@
 import scala.collection.immutable.List
-import scala.collection.mutable.ArrayBuffer
 import scala.util.control.Breaks.{break, breakable}
 
 object TopTen {
@@ -9,8 +8,7 @@ object TopTen {
       country: String,
       percIncrease: Double
   ): List[(String, Double)] = {
-    var temp: ArrayBuffer[(String, Double)] =
-      buffer.to[collection.mutable.ArrayBuffer]
+    var temp: List[(String, Double)] = buffer
     breakable {
       if (buffer.length < dimension) {
         temp = temp :+ (country, percIncrease)
@@ -24,11 +22,11 @@ object TopTen {
           }
         })
         if (index != -1) {
-          temp(index) = (country, percIncrease)
+          temp = temp.updated(index, (country, percIncrease))
         }
       }
     }
-    temp.toList
+    temp
   }
 
   def getCountries(buffer: List[(String, Double)]): List[String] = {
@@ -40,9 +38,7 @@ object TopTen {
   }
 
   def clear(buffer: List[(String, Double)]): List[(String, Double)] = {
-    val temp: ArrayBuffer[(String, Double)] = buffer.to[ArrayBuffer]
-    temp.clear()
-    temp.toList
+    List.empty
   }
 
 }

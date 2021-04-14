@@ -23,14 +23,13 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
   import sparkSession.implicits._
 
   def computeMovingAverageAndPercentageIncrease(): (
-      mutable.Map[String, Dataset[Row]],
-      mutable.Map[String, (String, String)]
+      Map[String, Dataset[Row]],
+      Map[String, (String, String)]
   ) = {
 
-    val views: mutable.Map[String, Dataset[Row]] =
-      scala.collection.concurrent.TrieMap.empty[String, Dataset[Row]]
-    val dateRange: mutable.Map[String, (String, String)] =
-      scala.collection.concurrent.TrieMap.empty[String, (String, String)]
+    var views: Map[String, Dataset[Row]] = Map.empty[String, Dataset[Row]]
+    var dateRange: Map[String, (String, String)] =
+      Map.empty[String, (String, String)]
     var country_str: String = ""
     df.show(200, truncate = true)
     val countries: Array[Row] = CountryHandler.getCountries(df)
@@ -39,25 +38,43 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
         Future {
           country_str = CountryHandler.getCountryName(country)
           print("\nHandling country: " + country_str)
-          views(country_str) = CountryHandler.getCountryView(country, session)
-          views(country_str) =
-            views(country_str).withColumn("cases", col("cases").cast("Double"))
-          views(country_str) =
-            CountryHandler.fillMissingDates(views(country_str), session)
-          dateRange(country_str) = (
-            views(country_str)
-              .select(functions.max("dateRep"))
-              .collect()(0)(0)
-              .toString,
-            views(country_str)
-              .select(functions.min("dateRep"))
-              .collect()(0)(0)
-              .toString
+          views = views.updated(
+            country_str,
+            CountryHandler.getCountryView(country, session)
           )
-          views(country_str) =
+          views = views.updated(
+            country_str,
+            views(country_str).withColumn("cases", col("cases").cast("Double"))
+          )
+
+          views = views.updated(
+            country_str,
+            CountryHandler.fillMissingDates(views(country_str), session)
+          )
+
+          dateRange = dateRange.updated(
+            country_str,
+            (
+              views(country_str)
+                .select(functions.max("dateRep"))
+                .collect()(0)(0)
+                .toString,
+              views(country_str)
+                .select(functions.min("dateRep"))
+                .collect()(0)(0)
+                .toString
+            )
+          )
+          views = views.updated(
+            country_str,
             StatisticsHandler.calculateMovingAverage(views(country_str))
-          views(country_str) = StatisticsHandler
-            .calculatePercentageIncrease(views(country_str), session)
+          )
+
+          views = views.updated(
+            country_str,
+            StatisticsHandler
+              .calculatePercentageIncrease(views(country_str), session)
+          )
           print("\nReturning from country: " + country_str)
           0
         }(ec)
@@ -69,10 +86,10 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
   }
 
   def computeTopTen(
-      views: mutable.Map[String, Dataset[Row]],
-      dateRange: mutable.Map[String, (String, String)]
+      views: Map[String, Dataset[Row]],
+      dateRange: Map[String, (String, String)]
   ): DataFrame = {
-    var temp_list: immutable.List[(String, Double)] = List.empty
+    var temp_list: List[(String, Double)] = List.empty
     val reportingInterval = StatisticsHandler.getReportingInterval(dateRange)
     val daysCount = DAYS.between(
       reportingInterval._2.toInstant,
