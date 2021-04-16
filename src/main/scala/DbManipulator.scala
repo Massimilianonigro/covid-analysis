@@ -6,19 +6,8 @@ import org.apache.spark.sql.{DataFrame, Dataset, Row, SparkSession, functions}
 import java.text.SimpleDateFormat
 import java.time.temporal.ChronoUnit.DAYS
 import java.util.Date
-import java.util.concurrent.{ExecutorService, Executors}
-import scala.collection.mutable // needed for TrieMap (thread-safe map)
-import scala.collection.immutable
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, ExecutionContext, Future}
 
 class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
-
-  val executor: ExecutorService =
-    Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
-
-  val ec: ExecutionContext = ExecutionContext.fromExecutor(executor)
-  val session: SparkSession = sparkSession.sqlContext.sparkSession
 
   import sparkSession.implicits._
 
@@ -26,62 +15,58 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
       Map[String, Dataset[Row]],
       Map[String, (String, String)]
   ) = {
-
+    val session: SparkSession = sparkSession.sqlContext.sparkSession
     var views: Map[String, Dataset[Row]] = Map.empty[String, Dataset[Row]]
     var dateRange: Map[String, (String, String)] =
       Map.empty[String, (String, String)]
     var country_str: String = ""
-    df.show(200, truncate = true)
+    //df.show(200, truncate = true)
     val countries: Array[Row] = CountryHandler.getCountries(df)
-    val results: Seq[Future[Int]] =
-      countries.map(country => {
-        Future {
-          country_str = CountryHandler.getCountryName(country)
-          print("\nHandling country: " + country_str)
-          views = views.updated(
-            country_str,
-            CountryHandler.getCountryView(country, session)
-          )
-          views = views.updated(
-            country_str,
-            views(country_str).withColumn("cases", col("cases").cast("Double"))
-          )
+    countries.foreach(country => {
+      country_str = CountryHandler.getCountryName(country)
+      if (country_str == "Paraguay") {
+        print("\nHandling country: " + country_str)
+        views = views.updated(
+          country_str,
+          CountryHandler.getCountryView(country, session)
+        )
+        views(country_str).show(1000, truncate = false)
+        views = views.updated(
+          country_str,
+          views(country_str).withColumn("cases", col("cases").cast("Double"))
+        )
 
-          views = views.updated(
-            country_str,
-            CountryHandler.fillMissingDates(views(country_str), session)
-          )
+        views = views.updated(
+          country_str,
+          CountryHandler.fillMissingDates(views(country_str), session)
+        )
 
-          dateRange = dateRange.updated(
-            country_str,
-            (
-              views(country_str)
-                .select(functions.max("dateRep"))
-                .collect()(0)(0)
-                .toString,
-              views(country_str)
-                .select(functions.min("dateRep"))
-                .collect()(0)(0)
-                .toString
-            )
+        dateRange = dateRange.updated(
+          country_str,
+          (
+            views(country_str)
+              .select(functions.max("dateRep"))
+              .collect()(0)(0)
+              .toString,
+            views(country_str)
+              .select(functions.min("dateRep"))
+              .collect()(0)(0)
+              .toString
           )
-          views = views.updated(
-            country_str,
-            StatisticsHandler.calculateMovingAverage(views(country_str))
-          )
+        )
+        views = views.updated(
+          country_str,
+          StatisticsHandler.calculateMovingAverage(views(country_str))
+        )
 
-          views = views.updated(
-            country_str,
-            StatisticsHandler
-              .calculatePercentageIncrease(views(country_str), session)
-          )
-          print("\nReturning from country: " + country_str)
-          0
-        }(ec)
-      })
-    val allDone: Future[Seq[Int]] = Future.sequence(results)
-    //wait for results
-    Await.result(allDone, scala.concurrent.duration.Duration.Inf)
+        views = views.updated(
+          country_str,
+          StatisticsHandler
+            .calculatePercentageIncrease(views(country_str), session)
+        )
+        print("\nReturning from country: " + country_str)
+      }
+    })
     (views, dateRange)
   }
 
@@ -103,47 +88,34 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     val topTen = TopTen
     val pattern = "yyyy-MM-dd"
     val simpleDateFormat = new SimpleDateFormat(pattern)
-    //executor =
-    //  Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors())
-    //ec = ExecutionContext.fromExecutor(executor)
-    val results: Seq[Future[Int]] = (0 until daysCount.toInt)
+    (0 until daysCount.toInt)
       .map(days => reportingInterval._2.toInstant.plus(days, DAYS))
-      .map(day => {
-        Future {
-          val dateDay = simpleDateFormat.format(Date.from(day))
-          print("\n \n Day is now " + dateDay)
-          val countries =
-            StatisticsHandler.reportingCountries(dateRange, dateDay)
-          countries.foreach(country => {
-            temp_list = topTen.add(
-              temp_list,
-              country,
-              views(country)
-                .select("perc_increase")
-                .filter(views(country)("dateRep") === dateDay)
-                .collect()(0)(0)
-                .toString
-                .toDouble
-            )
-          })
-          //At the end of the day the topTen list has to be added to the minMax dataset
-          val rowToAdd = Seq(
-            (dateDay, topTen.getCountries(temp_list))
-          ).toDF("day", "top_ten")
-          minMax = minMax.union(rowToAdd)
-          topTen.clear(temp_list)
-          0
-        }(ec)
+      .foreach(day => {
+        val dateDay = simpleDateFormat.format(Date.from(day))
+        print("\n \n Day is now " + dateDay)
+        val countries =
+          StatisticsHandler.reportingCountries(dateRange, dateDay)
+        countries.foreach(country => {
+          temp_list = topTen.add(
+            temp_list,
+            country,
+            views(country)
+              .select("perc_increase")
+              .filter(views(country)("dateRep") === dateDay)
+              .collect()(0)(0)
+              .toString
+              .toDouble
+          )
+        })
+        //At the end of the day the topTen list has to be added to the minMax dataset
+        val rowToAdd = Seq(
+          (dateDay, topTen.getCountries(temp_list))
+        ).toDF("day", "top_ten")
+        minMax = minMax.union(rowToAdd)
+        topTen.clear(temp_list)
       })
 
-    val allDone = Future.sequence(results)
-    //wait for results
-    Await.result(allDone, scala.concurrent.duration.Duration.Inf)
     minMax
-  }
-
-  def shutdown(): Unit = {
-    executor.shutdown()
   }
 
 }

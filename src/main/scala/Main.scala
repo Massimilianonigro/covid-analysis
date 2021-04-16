@@ -9,7 +9,7 @@ object Main {
     val session = spark.sqlContext.sparkSession
 
     var df = spark.read.csv(
-      "/home/mpiuser/resources/data.csv"
+      "/home/mpiuser/cloud/data.csv"
     )
 
     df = PreprocessingHandler.dfPreprocessing(df)
@@ -19,7 +19,6 @@ object Main {
     val (country_views, data_date_range) =
       dbManipulator.computeMovingAverageAndPercentageIncrease()
     val topTen = dbManipulator.computeTopTen(country_views, data_date_range)
-    dbManipulator.shutdown()
     topTen.show(100)
   }
 
@@ -27,8 +26,8 @@ object Main {
     SparkSession
       .builder()
       .appName("Covid-Analysis")
-      .config("spark.master", "spark://192.168.43.129:7077")
-      .config("spark.jars", "/home/mpiuser/resources/covid-analysis.jar")
+      .config("spark.master", "local")
+      .config("spark.jars", "/home/mpiuser/cloud/covid-analysis.jar")
       .getOrCreate()
 
   }
