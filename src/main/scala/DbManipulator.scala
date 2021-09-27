@@ -24,48 +24,45 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     val countries: Array[Row] = CountryHandler.getCountries(df)
     countries.foreach(country => {
       country_str = CountryHandler.getCountryName(country)
-      if (country_str == "Paraguay") {
-        print("\nHandling country: " + country_str)
-        views = views.updated(
-          country_str,
-          CountryHandler.getCountryView(country, session)
-        )
-        views(country_str).show(1000, truncate = false)
-        views = views.updated(
-          country_str,
-          views(country_str).withColumn("cases", col("cases").cast("Double"))
-        )
+      print("\nHandling country: " + country_str)
+      views = views.updated(
+        country_str,
+        CountryHandler.getCountryView(country, session)
+      )
+      views = views.updated(
+        country_str,
+        views(country_str).withColumn("cases", col("cases").cast("Double"))
+      )
 
-        views = views.updated(
-          country_str,
-          CountryHandler.fillMissingDates(views(country_str), session)
-        )
+      views = views.updated(
+        country_str,
+        CountryHandler.fillMissingDates(views(country_str), session)
+      )
 
-        dateRange = dateRange.updated(
-          country_str,
-          (
-            views(country_str)
-              .select(functions.max("dateRep"))
-              .collect()(0)(0)
-              .toString,
-            views(country_str)
-              .select(functions.min("dateRep"))
-              .collect()(0)(0)
-              .toString
-          )
+      dateRange = dateRange.updated(
+        country_str,
+        (
+          views(country_str)
+            .select(functions.max("dateRep"))
+            .collect()(0)(0)
+            .toString,
+          views(country_str)
+            .select(functions.min("dateRep"))
+            .collect()(0)(0)
+            .toString
         )
-        views = views.updated(
-          country_str,
-          StatisticsHandler.calculateMovingAverage(views(country_str))
-        )
+      )
+      views = views.updated(
+        country_str,
+        StatisticsHandler.calculateMovingAverage(views(country_str))
+      )
 
-        views = views.updated(
-          country_str,
-          StatisticsHandler
-            .calculatePercentageIncrease(views(country_str), session)
-        )
-        print("\nReturning from country: " + country_str)
-      }
+      views = views.updated(
+        country_str,
+        StatisticsHandler
+          .calculatePercentageIncrease(views(country_str), session)
+      )
+      print("\nReturning from country: " + country_str)
     })
     (views, dateRange)
   }

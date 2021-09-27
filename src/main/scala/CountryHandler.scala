@@ -83,8 +83,7 @@ object CountryHandler {
       val casesReported = dateView
         .collectAsList()
         .get(indexOfDateOfReport.asInstanceOf[Int])
-        .getString(1)
-        .toDouble
+        .getDouble(1)
       dateView = dateView.withColumn(
         "cases",
         when(
