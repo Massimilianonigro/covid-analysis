@@ -7,20 +7,23 @@ import java.text.SimpleDateFormat
 import java.time.temporal.ChronoUnit.DAYS
 import java.util.Date
 
+// Performs the required operations over the dataset
 class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
 
   import sparkSession.implicits._
 
+  // seven days moving average and daily performance increase computation
   def computeMovingAverageAndPercentageIncrease(): (
       Map[String, Dataset[Row]],
       Map[String, (String, String)]
   ) = {
     val session: SparkSession = sparkSession.sqlContext.sparkSession
+
+    // initializes empty set of views made of country name and related rows
     var views: Map[String, Dataset[Row]] = Map.empty[String, Dataset[Row]]
     var dateRange: Map[String, (String, String)] =
       Map.empty[String, (String, String)]
     var country_str: String = ""
-    //df.show(200, truncate = true)
     val countries: Array[Row] = CountryHandler.getCountries(df)
     countries.foreach(country => {
       country_str = CountryHandler.getCountryName(country)
@@ -29,16 +32,19 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
         country_str,
         CountryHandler.getCountryView(country, session)
       )
+
       views = views.updated(
         country_str,
         views(country_str).withColumn("cases", col("cases").cast("Double"))
       )
 
+      // missing dates are added to countries with gaps
       views = views.updated(
         country_str,
         CountryHandler.fillMissingDates(views(country_str), session)
       )
 
+      // computes range of report dates of each country
       dateRange = dateRange.updated(
         country_str,
         (
@@ -52,6 +58,7 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
             .toString
         )
       )
+
       views = views.updated(
         country_str,
         StatisticsHandler.calculateMovingAverage(views(country_str))
@@ -67,6 +74,7 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     (views, dateRange)
   }
 
+  // using the data computed, the top ten countries with the highest percentage increase are computed
   def computeTopTen(
       views: Map[String, Dataset[Row]],
       dateRange: Map[String, (String, String)]
@@ -77,6 +85,8 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
       reportingInterval._2.toInstant,
       reportingInterval._1.toInstant
     )
+
+    // stores the top ten every day
     var minMax: DataFrame = Seq
       .empty[String]
       .toDS()
@@ -85,6 +95,8 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
     val topTen = TopTen
     val pattern = "yyyy-MM-dd"
     val simpleDateFormat = new SimpleDateFormat(pattern)
+
+    // iterates over days
     (0 until daysCount.toInt)
       .map(days => reportingInterval._2.toInstant.plus(days, DAYS))
       .foreach(day => {
@@ -92,6 +104,8 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
         print("\n \n Day is now " + dateDay)
         val countries =
           StatisticsHandler.reportingCountries(dateRange, dateDay)
+
+        // iterates over countries and orders them by percentage increase
         countries.foreach(country => {
           temp_list = topTen.add(
             temp_list,
@@ -104,7 +118,8 @@ class DbManipulator(df: sql.DataFrame, sparkSession: SparkSession) {
               .toDouble
           )
         })
-        //At the end of the day the topTen list has to be added to the minMax dataset
+
+        // At the end of the day, the topTen list is added to the minMax dataset
         val rowToAdd = Seq(
           (dateDay, topTen.getCountries(temp_list))
         ).toDF("day", "top_ten")

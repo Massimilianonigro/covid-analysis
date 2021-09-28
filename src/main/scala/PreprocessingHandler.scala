@@ -1,11 +1,13 @@
 import org.apache.spark.sql.{Dataset, Row}
 import org.apache.spark.sql.functions.array_contains
 
+// Performs an initial cleanup of the dataset
 object PreprocessingHandler {
   def dfPreprocessing(
       df: Dataset[Row],
       max_country_number: String
   ): Dataset[Row] = {
+    // removes unused columns and renames used columns
     var out = df
       .drop("_c1") //day
       .drop("_c2") //month
@@ -32,7 +34,8 @@ object PreprocessingHandler {
         out("country") === distinct_countries("countries_to_keep")
       )
       .drop("countries_to_keep")
-    out.show(false)
+
+    // deleting the first row, which contains the name of the columns
     val firstRow = out.first()
     out
       .filter(row => row != firstRow)

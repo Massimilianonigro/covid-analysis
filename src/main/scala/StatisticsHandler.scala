@@ -5,6 +5,8 @@ import org.apache.spark.sql.{Dataset, Row, SparkSession}
 import java.text.SimpleDateFormat
 import java.util.Date
 import collection.immutable.List
+
+// implements functions that compute the requested metrics
 object StatisticsHandler {
 
   val formatter = new SimpleDateFormat("yyyy-MM-dd")
