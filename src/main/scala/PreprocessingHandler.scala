@@ -1,8 +1,12 @@
 import org.apache.spark.sql.{Dataset, Row}
+import org.apache.spark.sql.functions.array_contains
 
 object PreprocessingHandler {
-  def dfPreprocessing(df: Dataset[Row]): Dataset[Row] = {
-    val out = df
+  def dfPreprocessing(
+      df: Dataset[Row],
+      max_country_number: String
+  ): Dataset[Row] = {
+    var out = df
       .drop("_c1") //day
       .drop("_c2") //month
       .drop("_c3") //year
@@ -15,6 +19,20 @@ object PreprocessingHandler {
       .withColumnRenamed("_c0", "dateRep")
       .withColumnRenamed("_c6", "country")
       .withColumnRenamed("_c4", "cases")
+
+    var distinct_countries =
+      out
+        .select(out("country"))
+        .distinct()
+        .limit(max_country_number.toInt)
+        .withColumnRenamed("country", "countries_to_keep")
+    out = out
+      .join(
+        distinct_countries,
+        out("country") === distinct_countries("countries_to_keep")
+      )
+      .drop("countries_to_keep")
+    out.show(false)
     val firstRow = out.first()
     out
       .filter(row => row != firstRow)
