@@ -4,18 +4,22 @@ object Main {
 
   def main(args: Array[String]): Unit = {
     time {
+      // initialize Spark session
       val spark = initSession()
       spark.sparkContext.setLogLevel("ERROR")
       val session = spark.sqlContext.sparkSession
 
+      // read dataset from input
       var df = spark.read.csv(
         "/home/mpiuser/cloud/data.csv"
       )
 
+      // remove unused columns, rename used ones
       df = PreprocessingHandler.dfPreprocessing(df)
       df.createOrReplaceTempView("df")
       val dbManipulator = new DbManipulator(df, session)
 
+      // create view to manipulate and query
       val (country_views, data_date_range) =
         dbManipulator.computeMovingAverageAndPercentageIncrease()
       val topTen = dbManipulator.computeTopTen(country_views, data_date_range)

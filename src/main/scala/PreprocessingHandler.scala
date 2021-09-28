@@ -1,7 +1,10 @@
 import org.apache.spark.sql.{Dataset, Row}
 
+// Performs an initial cleanup of the dataset
 object PreprocessingHandler {
   def dfPreprocessing(df: Dataset[Row]): Dataset[Row] = {
+
+    // removes unused columns and renames used columns
     val out = df
       .drop("_c1") //day
       .drop("_c2") //month
@@ -15,6 +18,8 @@ object PreprocessingHandler {
       .withColumnRenamed("_c0", "dateRep")
       .withColumnRenamed("_c6", "country")
       .withColumnRenamed("_c4", "cases")
+
+    // deleting the first row, which contains the name of the columns
     val firstRow = out.first()
     out
       .filter(row => row != firstRow)
