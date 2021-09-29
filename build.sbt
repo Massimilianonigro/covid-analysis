@@ -8,7 +8,7 @@ libraryDependencies += "com.lihaoyi" %% "os-lib" % "0.7.8"
 
 libraryDependencies += "com.lihaoyi" %% "upickle" % "0.9.5"
 
-val sparkVersion = "3.1.1"
+val sparkVersion = "3.1.2"
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion % Provided,
   "org.apache.spark" %% "spark-sql" % sparkVersion % Provided

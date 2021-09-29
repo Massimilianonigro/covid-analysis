@@ -1,5 +1,4 @@
 import org.apache.spark.sql.{Dataset, Row}
-import org.apache.spark.sql.functions.array_contains
 
 // Performs an initial cleanup of the dataset
 object PreprocessingHandler {
@@ -28,6 +27,7 @@ object PreprocessingHandler {
         .distinct()
         .limit(max_country_number.toInt)
         .withColumnRenamed("country", "countries_to_keep")
+    println(distinct_countries.count())
     out = out
       .join(
         distinct_countries,

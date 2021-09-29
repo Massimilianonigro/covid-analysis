@@ -3,10 +3,11 @@ import json
 import random
 import math
 import csv
+import os
+import time
 
-CONFIG_PATH = "./config/input.json"
-OUTPUT_PATH = "./config/output.json"
-CSV_PATH = "../profiling/results.csv"
+OUTPUT_PATH = "./output/output.json"
+CSV_PATH = "../spark_profiling/results.csv"
 JAR_PATH = "./covid-analysis.jar"
 STARTING_CORES = 2
 STARTING_COUNTRIES = 2
@@ -15,6 +16,18 @@ DEFAULT_CORES = 8
 MASTER_ADDRESS = "172.20.10.4"
 MASTER_PORT = 7077
 EXECUTOR_MEMORY = "4g"
+
+
+# Waits for the file with file_name to be modified
+def wait_output(file_name):
+    time = os.path.getmtime(file_name)
+    while True:
+        if time != os.path.getmtime(file_name):
+            with open(file_name, "r") as f:
+                info = f.read()
+            time = os.path.getmtime(file_name)
+        time.sleep(0.1)
+
 
 # Initializates csv file with the simulation parameters (working)
 def csv_initialization(parameters):
@@ -45,7 +58,7 @@ def simulate(cores=DEFAULT_CORES, countries=DEFAULT_COUNTRIES):
         "/usr/local/spark/sbin/start-all.sh",
         "spark-submit --class Main --master "
         + MASTER_ADDRESS
-        + " --deploy-mode cluster"
+        + " --deploy-mode client"
         + " --executor-memory "
         + EXECUTOR_MEMORY
         + " --total-executor-cores "
@@ -55,14 +68,20 @@ def simulate(cores=DEFAULT_CORES, countries=DEFAULT_COUNTRIES):
         + " "
         + str(countries),
     ]
-    for command in commands:
-        print(command)
-        exe = pexpect.spawnu(
-            command,
-            encoding="utf-8",
-            codec_errors="ignore",
-        )
-        exe.expect(pexpect.EOF)
+    print(commands[0])
+    exe = pexpect.spawnu(
+        commands[0],
+        encoding="utf-8",
+        codec_errors="ignore",
+    )
+    exe.expect(pexpect.EOF)
+    print(commands[1])
+    exe = pexpect.spawnu(
+        commands[1],
+        encoding="utf-8",
+        codec_errors="ignore",
+    )
+    wait_output(OUTPUT_PATH)
 
 
 def run_profiling(cores=False, countries=False, step=1, simulation_number=10):
@@ -75,7 +94,7 @@ def run_profiling(cores=False, countries=False, step=1, simulation_number=10):
     if cores:
         csv_fields.append("cores")
         core_number = STARTING_CORES
-    csv_initialization(csv_fields, CSV_PATH)
+    csv_initialization(csv_fields)
     for sim in range(simulation_number):
         simulate(cores=core_number, countries=country_number)
         output = json.loads(open(OUTPUT_PATH, "r").read())
